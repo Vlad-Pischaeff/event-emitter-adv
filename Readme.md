@@ -123,20 +123,19 @@ emitter.on('e', () => {}); // will trigger a console warning
 
 ## 📚 API Summary
 
-```js
-Method	Description
-on(event, fn, ctx?, w?, c?)	Add listener
-once(event, fn, ctx?, w?)	Add one-time listener
-off(event, fn?, ctx?)	Remove one or all listeners
-emit(event, ...args)	Trigger event
-emitAsync(event, ...args)	Async trigger with await support
-onAny(fn)	Listen to all events
-offAny(fn)	Remove global listener
-clear()	Remove all listeners
-listeners(event)	Get listeners for an event
-eventNames()	List all event names
-listenersNumber(event)	Count listeners for an event
-```
+| Method                          | Description                          |
+|---------------------------------|--------------------------------------|
+| `on(event, fn, ctx?, w?, c?)`   | Add listener                         |
+| `once(event, fn, ctx?, w?)`     | Add one-time listener                |
+| `off(event, fn?, ctx?)`         | Remove one or all listeners          |
+| `emit(event, ...args)`          | Trigger event                        |
+| `emitAsync(event, ...args)`     | Async trigger with `await` support   |
+| `onAny(fn)`                     | Listen to all events                 |
+| `offAny(fn)`                    | Remove global listener               |
+| `clear()`                       | Remove all listeners                 |
+| `listeners(event)`              | Get listeners for an event           |
+| `eventNames()`                  | List all event names                 |
+| `listenersNumber(event)`        | Count listeners for an event         |
 
 ## ✅ TypeScript Support
 All methods are fully typed with strict: true compatibility.
