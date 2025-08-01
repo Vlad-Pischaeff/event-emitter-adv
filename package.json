@@ -1,0 +1,30 @@
+{
+  "name": "event-emitter-plus",
+  "version": "1.0.0",
+  "description": "An advanced EventEmitter with priority, context, and one-time listeners.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "keywords": ["eventemitter", "events", "emitter", "typescript", "priority", "context"],
+  "author": "Владислав",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/event-emitter-plus.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
