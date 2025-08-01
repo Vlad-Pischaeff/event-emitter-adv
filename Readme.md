@@ -1,8 +1,8 @@
-# event-emitter-plus
+# event-emitter-adv
 
 > A powerful, typed, and flexible EventEmitter for TypeScript and JavaScript.
 
-`event-emitter-plus` is an advanced event system with:
+`event-emitter-adv` is an advanced event system with:
 - Prioritized listeners (via `weight`)
 - One-time listeners
 - Context binding (`this`)
@@ -15,7 +15,7 @@
 ## 🚀 Installation
 
 ```bash
-npm install event-emitter-plus
+npm install event-emitter-adv
 ```
 
 ## Usage
@@ -23,7 +23,7 @@ npm install event-emitter-plus
 ### BasicUsage
 
 ```js
-import { EventEmitter } from 'event-emitter-plus';
+import { EventEmitter } from 'event-emitter-adv';
 
 const emitter = new EventEmitter();
 
