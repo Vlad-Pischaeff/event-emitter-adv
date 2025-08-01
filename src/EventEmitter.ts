@@ -1,5 +1,3 @@
-// src/eventEmitter.ts
-
 const MANY = 0;
 const ONCE = 1;
 const DONE = 2;
@@ -191,7 +189,6 @@ export default class EventEmitter {
     return this;
   }
 
-  /** Trigger an event asynchronously (supports await) */
   /** Trigger an event asynchronously (supports await) */
   async emitAsync(event: string, ...args: any[]): Promise<this> {
     const self = internal(this);
