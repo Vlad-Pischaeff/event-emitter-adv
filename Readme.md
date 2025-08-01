@@ -111,16 +111,6 @@ emitter.emit('info', 'It works');
 // [LOG] It works
 ```
 
-## 🔢 Limit max listeners
-
-```js
-const emitter = new EventEmitter(2); // max 2 listeners per event
-
-emitter.on('e', () => {});
-emitter.on('e', () => {});
-emitter.on('e', () => {}); // will trigger a console warning
-```
-
 ## 📚 API Summary
 
 | Method                          | Description                          |
