@@ -1,7 +1,7 @@
 {
   "name": "event-emitter-adv",
   "version": "1.0.0",
-  "description": "An advanced EventEmitter with priority, context, and one-time listeners.",
+  "description": "An advanced EventEmitter with priority, context, and async support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -12,26 +12,28 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "vitest",
+    "test:watch": "vitest watch"
   },
   "keywords": [
     "eventemitter",
     "events",
-    "emitter",
     "typescript",
     "priority",
     "context"
   ],
-  "author": "Vlad Pishchaev",
+  "author": "Vlad-Pischaeff",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vlad-Pischaeff/event-emitter-adv"
+    "url": "https://github.com/yourusername/event-emitter-adv.git"
   },
   "files": [
     "dist"
   ],
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^1.0.0"
   }
 }

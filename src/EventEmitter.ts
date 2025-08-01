@@ -1,111 +1,95 @@
+// src/eventEmitter.ts
+
 const MANY = 0;
 const ONCE = 1;
 const DONE = 2;
 
-type EventCallback = (...args: any[]) => void | Promise<void>;
-type AnyEventCallback = (eventName: string, ...args: any[]) => void | Promise<void>;
+type Callback = (...args: any[]) => void;
 
 interface CallbackData {
-  callback: EventCallback;
-  originalCallback: EventCallback;
-  context: any;
+  callback: Callback;
   weight: number;
   count: number;
+  context: any;
 }
 
-interface InternalData {
+interface InternalState {
   _events: Map<string, CallbackData[]>;
+  _anyCallbacks: Callback[];
   _console: Console;
   _maxListeners: number | null;
-  _anyListeners: Set<AnyEventCallback>;
 }
 
-const privateMap = new WeakMap<object, InternalData>();
+const privateMap = new WeakMap<object, InternalState>();
 
-function internal(obj: object): InternalData {
+function internal(obj: object): InternalState {
   if (!privateMap.has(obj)) {
     privateMap.set(obj, {
       _events: new Map(),
+      _anyCallbacks: [],
       _console: console,
       _maxListeners: null,
-      _anyListeners: new Set(),
     });
   }
   return privateMap.get(obj)!;
 }
 
 /**
- * Advanced EventEmitter with priority, context, and call limits.
+ * EventEmitter class for event-driven programming.
  */
 export default class EventEmitter {
-  /**
-   * Constructor.
-   * @param maxListeners Maximum listeners per event (null = unlimited)
-   * @param localConsole Optional custom console for logging
-   */
-  constructor(maxListeners: number | null = null, localConsole: Console = console) {
+  constructor(
+    maxListeners: number | null = null,
+    localConsole: Console = console
+  ) {
     const self = internal(this);
     self._console = localConsole;
-    self._maxListeners = maxListeners !== null ? parseInt(maxListeners.toString(), 10) : null;
+    self._maxListeners =
+      maxListeners === null ? null : parseInt(maxListeners as any, 10);
   }
 
-  /**
-   * Internal: get callbacks array for given event (creates if missing)
-   */
-  private _getCallbacks(eventName: string): CallbackData[] {
-    const self = internal(this);
-    if (!self._events.has(eventName)) {
-      self._events.set(eventName, []);
-    }
-    return self._events.get(eventName)!;
-  }
-
-  /**
-   * Internal: check if an event exists
-   */
-  private _has(eventName: string): boolean {
-    return internal(this)._events.has(eventName);
-  }
-
-  /**
-   * Internal: check if max listener limit is reached
-   */
-  private _achieveMaxListener(eventName: string): boolean {
-    const self = internal(this);
-    return self._maxListeners !== null && self._maxListeners <= this.listenersNumber(eventName);
-  }
-
-  /**
-   * Internal: check if a specific callback with context is already added
-   */
-  private _callbackExists(eventName: string, callback: EventCallback, context: any): boolean {
-    if (!this._has(eventName)) return false;
-    const callbacks = this._getCallbacks(eventName);
-    return callbacks.some(cb => cb.originalCallback === callback && cb.context === context);
-  }
-
-  /**
-   * Internal: add a callback to the event list, ordered by weight
-   */
-  private _addCallback(
-    eventName: string,
-    callback: EventCallback,
-    context: any,
-    weight: number,
-    count: number
+  /** Add a listener to an event */
+  on(
+    event: string,
+    callback: Callback,
+    context: any = null,
+    weight = 1,
+    count = MANY
   ): this {
+    const self = internal(this);
+
+    if (typeof event !== "string" || !event.trim()) {
+      throw new TypeError("Event name must be a non-empty string");
+    }
+
+    if (typeof callback !== "function") {
+      throw new TypeError(`${callback} is not a function`);
+    }
+
+    if (this._has(event) && this._achieveMaxListener(event)) {
+      self._console.warn(
+        `Max listeners (${self._maxListeners}) for event "${event}" is reached!`
+      );
+      return this;
+    }
+
+    if (this._callbackExists(event, callback, context)) {
+      self._console.warn(
+        `Event "${event}" already has the specified callback.`
+      );
+      return this;
+    }
+
     const boundCallback = context ? callback.bind(context) : callback;
     const callbackData: CallbackData = {
       callback: boundCallback,
-      originalCallback: callback,
-      context,
       weight,
-      count
+      count,
+      context,
     };
 
-    const callbacks = this._getCallbacks(eventName);
-    const insertIndex = callbacks.findIndex(cb => cb.weight < weight);
-
+    const callbacks = this._getCallbacks(event);
+    const insertIndex = callbacks.findIndex((cb) => cb.weight < weight);
     if (insertIndex === -1) {
       callbacks.push(callbackData);
     } else {
@@ -115,221 +99,219 @@ export default class EventEmitter {
     return this;
   }
 
-  /**
-   * Subscribe to an event.
-   * @param eventName Event name
-   * @param callback Listener function
-   * @param context Context (`this`) binding for callback
-   * @param weight Higher value executes earlier (default: 1)
-   * @param count How many times to call (0 = infinite, default)
-   */
-  on(
-    eventName: string,
-    callback: EventCallback,
+  /** Add a one-time listener to an event */
+  once(
+    event: string,
+    callback: Callback,
     context: any = null,
-    weight = 1,
-    count = MANY
+    weight = 1
   ): this {
-    const self = internal(this);
-
-    if (typeof eventName !== 'string' || !eventName.trim()) {
-      throw new TypeError('Event name must be a non-empty string');
-    }
-
-    if (typeof callback !== 'function') {
-      throw new TypeError(`${callback} is not a function`);
-    }
-
-    if (this._has(eventName) && this._achieveMaxListener(eventName)) {
-      self._console.warn(`Max listeners (${self._maxListeners}) for event "${eventName}" is reached!`);
-      return this;
-    }
-
-    if (this._callbackExists(eventName, callback, context)) {
-      self._console.warn(`Event "${eventName}" already has the specified callback.`);
-      return this;
-    }
-
-    return this._addCallback(eventName, callback, context, weight, count);
+    return this.on(event, callback, context, weight, ONCE);
   }
 
-  /**
-   * Subscribe to an event only once.
-   * @param eventName Event name
-   * @param callback Listener
-   * @param context Optional context
-   * @param weight Priority weight
-   */
-  once(eventName: string, callback: EventCallback, context: any = null, weight = 1): this {
-    return this.on(eventName, callback, context, weight, ONCE);
-  }
+  /** Remove one or all listeners for an event */
+  off(
+    event: string,
+    callback: Callback | null = null,
+    context: any = null
+  ): this {
+    if (!this._has(event)) return this;
 
-  /**
-   * Remove listeners from an event.
-   * @param eventName Event name
-   * @param callback Specific callback to remove (or null for all)
-   * @param context Must match if callback is provided
-   */
-  off(eventName: string, callback: EventCallback | null = null, context: any = null): this {
     const self = internal(this);
-    if (!this._has(eventName)) return this;
 
     if (callback === null) {
-      self._events.delete(eventName);
+      self._events.delete(event);
     } else {
-      const callbacks = this._getCallbacks(eventName);
-      const filtered = callbacks.filter(cb =>
-        !(cb.originalCallback === callback && cb.context === context)
-      );
-      if (filtered.length > 0) {
-        self._events.set(eventName, filtered);
-      } else {
-        self._events.delete(eventName);
+      const callbacks = this._getCallbacks(event);
+      const indices: number[] = [];
+
+      callbacks.forEach((cb, index) => {
+        const isMatch =
+          cb.callback === callback ||
+          (context &&
+            cb.context === context &&
+            (cb.callback === callback ||
+              cb.callback === callback.bind(context)));
+        if (isMatch) indices.push(index);
+      });
+
+      indices.reverse().forEach((i) => callbacks.splice(i, 1));
+      if (callbacks.length === 0) {
+        self._events.delete(event);
       }
     }
 
     return this;
   }
 
-  /**
-   * Emit an event synchronously.
-   */
-  emit(eventName: string, ...args: any[]): this {
-    if (!this._has(eventName)) return this;
+  /** Trigger an event synchronously */
+  emit(event: string, ...args: any[]): this {
+    const self = internal(this);
 
-    const callbacks = this._getCallbacks(eventName).slice();
-    const actualCallbacks = this._getCallbacks(eventName);
-    let changed = false;
+    // обычные обработчики
+    if (this._has(event)) {
+      const callbacks = this._getCallbacks(event).slice();
+      const callbacksToRemove: number[] = [];
 
-    for (let i = callbacks.length - 1; i >= 0; i--) {
-      const cb = callbacks[i];
-      if (cb.count === DONE) continue;
-
-      try {
-        cb.callback(...args);
-      } catch (err) {
-        internal(this)._console.error(`Error in event "${eventName}" callback:`, err);
-      }
-
-      if (cb.count === ONCE) {
-        const idx = actualCallbacks.findIndex(x => x === cb);
-        if (idx !== -1) {
-          actualCallbacks.splice(idx, 1);
-          changed = true;
+      callbacks.forEach((cb, i) => {
+        if (cb.count !== DONE) {
+          try {
+            cb.callback(...args);
+          } catch (err) {
+            self._console.error(`Error in event "${event}" callback:`, err);
+          }
+          if (cb.count === ONCE) {
+            cb.count = DONE;
+            callbacksToRemove.push(i);
+          }
         }
+      });
+
+      if (callbacksToRemove.length > 0) {
+        const actual = this._getCallbacks(event);
+        callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
+        if (actual.length === 0) self._events.delete(event);
       }
     }
 
-    // 🔔 Any listeners
-    for (const listener of internal(this)._anyListeners) {
-      try {
-        listener(eventName, ...args);
-      } catch (err) {
-        internal(this)._console.error(`Error in any-listener for "${eventName}":`, err);
-      }
-    }
-
-    if (changed && actualCallbacks.length === 0) {
-      internal(this)._events.delete(eventName);
+    // onAny обработчики
+    if (self._anyCallbacks && self._anyCallbacks.length > 0) {
+      self._anyCallbacks.forEach((fn) => {
+        try {
+          fn(event, ...args);
+        } catch (err) {
+          self._console.error(`Error in onAny listener:`, err);
+        }
+      });
     }
 
     return this;
   }
 
-  /**
-   * Emit event asynchronously. Waits for all handlers (including any listeners).
-   */
-  async emitAsync(eventName: string, ...args: any[]): Promise<this> {
-    if (this._has(eventName)) {
-      const callbacks = this._getCallbacks(eventName).slice();
-      const actualCallbacks = this._getCallbacks(eventName);
-      const toRemove: CallbackData[] = [];
+  /** Trigger an event asynchronously (supports await) */
+  async emitAsync(event: string, ...args: any[]): Promise<this> {
+    if (!this._has(event)) return this;
 
-      for (const cb of callbacks) {
-        if (cb.count === DONE) continue;
+    const callbacks = this._getCallbacks(event).slice();
+    const callbacksToRemove: number[] = [];
 
+    for (let i = 0; i < callbacks.length; i++) {
+      const cb = callbacks[i];
+      if (cb.count !== DONE) {
         try {
           await cb.callback(...args);
         } catch (err) {
-          internal(this)._console.error(`Error in async event "${eventName}" callback:`, err);
+          internal(this)._console.error(
+            `Error in async event "${event}" callback:`,
+            err
+          );
         }
 
         if (cb.count === ONCE) {
-          toRemove.push(cb);
+          cb.count = DONE;
+          callbacksToRemove.push(i);
         }
       }
+    }
 
-      toRemove.forEach(cb => {
-        const idx = actualCallbacks.indexOf(cb);
-        if (idx !== -1) actualCallbacks.splice(idx, 1);
-      });
-
-      if (actualCallbacks.length === 0) {
-        internal(this)._events.delete(eventName);
+    if (callbacksToRemove.length > 0) {
+      const actual = this._getCallbacks(event);
+      callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
+      if (actual.length === 0) {
+        internal(this)._events.delete(event);
       }
     }
 
-    // 🔔 Async any listeners
-    const anyListeners = [...internal(this)._anyListeners];
-    for (const listener of anyListeners) {
+    const anyCallbacks = internal(this)._anyCallbacks || [];
+    for (const fn of anyCallbacks) {
       try {
-        await listener(eventName, ...args);
+        await fn(event, ...args);
       } catch (err) {
-        internal(this)._console.error(`Error in async any-listener for "${eventName}":`, err);
+        internal(this)._console.error(`Error in async onAny listener:`, err);
       }
     }
 
     return this;
   }
 
-  /**
-   * Register a wildcard listener for any event.
-   * @param callback Called with (eventName, ...args)
-   */
-  onAny(callback: AnyEventCallback): this {
-    internal(this)._anyListeners.add(callback);
+  /** Register a listener for all events */
+  onAny(callback: Callback): this {
+    const self = internal(this);
+    if (!self._anyCallbacks) self._anyCallbacks = [];
+    self._anyCallbacks.push(callback);
     return this;
   }
 
-  /**
-   * Remove wildcard listener.
-   * @param callback The same function passed to `onAny`
-   */
-  offAny(callback: AnyEventCallback): this {
-    internal(this)._anyListeners.delete(callback);
+  /** Remove a global listener */
+  offAny(callback: Callback): this {
+    const self = internal(this);
+    if (!self._anyCallbacks) return this;
+    self._anyCallbacks = self._anyCallbacks.filter((cb) => cb !== callback);
     return this;
   }
 
-  /**
-   * Remove all events and listeners.
-   */
+  /** Remove all listeners */
   clear(): this {
-    internal(this)._events.clear();
+    const self = internal(this);
+    self._events.clear();
+    self._anyCallbacks = [];
     return this;
   }
 
-  /**
-   * Get number of listeners on a given event.
-   * @param eventName Event name
-   */
-  listenersNumber(eventName: string): number {
-    return this._has(eventName) ? this._getCallbacks(eventName).length : 0;
+  /** Get the number of listeners for an event */
+  listenersNumber(event: string): number {
+    return this._has(event) ? this._getCallbacks(event).length : 0;
   }
 
-  /**
-   * List all event names with listeners.
-   */
+  /** Get all event names */
   eventNames(): string[] {
     return Array.from(internal(this)._events.keys());
   }
 
-  /**
-   * Get the active callbacks for an event.
-   * @param eventName Event name
-   */
-  listeners(eventName: string): EventCallback[] {
-    return this._has(eventName)
-      ? this._getCallbacks(eventName).map(cb => cb.callback)
+  /** Get all listeners for a specific event */
+  listeners(event: string): Callback[] {
+    return this._has(event)
+      ? this._getCallbacks(event).map((cb) => cb.callback)
       : [];
+  }
+
+  /** Check if an event exists */
+  private _has(event: string): boolean {
+    return internal(this)._events.has(event);
+  }
+
+  /** Get or initialize callback list for event */
+  private _getCallbacks(event: string): CallbackData[] {
+    const self = internal(this);
+    if (!self._events.has(event)) {
+      self._events.set(event, []);
+    }
+    return self._events.get(event)!;
+  }
+
+  /** Check max listener limit */
+  private _achieveMaxListener(event: string): boolean {
+    const self = internal(this);
+    return (
+      self._maxListeners !== null &&
+      self._maxListeners <= this.listenersNumber(event)
+    );
+  }
+
+  /** Check if callback already exists */
+  private _callbackExists(
+    event: string,
+    callback: Callback,
+    context: any
+  ): boolean {
+    if (!this._has(event)) return false;
+    const callbacks = this._getCallbacks(event);
+    return callbacks.some((cb) => {
+      if (cb.callback === callback) return true;
+      if (context && cb.context === context) {
+        return cb.callback.toString() === callback.toString();
+      }
+      return false;
+    });
   }
 }
