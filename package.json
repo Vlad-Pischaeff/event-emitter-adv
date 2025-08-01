@@ -23,11 +23,11 @@
     "priority",
     "context"
   ],
-  "author": "Vlad-Pischaeff",
+  "author": "Vlad Pischaeff",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/event-emitter-adv.git"
+    "url": "https://github.com/Vlad-Pischaeff/event-emitter-adv.git"
   },
   "files": [
     "dist"
