@@ -14,12 +14,19 @@
     "build": "tsc",
     "prepare": "npm run build"
   },
-  "keywords": ["eventemitter", "events", "emitter", "typescript", "priority", "context"],
-  "author": "Владислав",
+  "keywords": [
+    "eventemitter",
+    "events",
+    "emitter",
+    "typescript",
+    "priority",
+    "context"
+  ],
+  "author": "Vlad Pishchaev",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/event-emitter-plus.git"
+    "url": "https://github.com/Vlad-Pischaeff/event-emitter-plus"
   },
   "files": [
     "dist"
