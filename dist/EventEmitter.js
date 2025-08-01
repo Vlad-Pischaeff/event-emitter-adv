@@ -104,9 +104,12 @@ export default class EventEmitter {
                     catch (err) {
                         self._console.error(`Error in event "${event}" callback:`, err);
                     }
-                    if (cb.count === ONCE) {
-                        cb.count = DONE;
-                        callbacksToRemove.push(i);
+                    if (cb.count > 0) {
+                        cb.count--;
+                        if (cb.count === 0) {
+                            cb.count = DONE;
+                            callbacksToRemove.push(i);
+                        }
                     }
                 }
             });
@@ -131,40 +134,46 @@ export default class EventEmitter {
         return this;
     }
     /** Trigger an event asynchronously (supports await) */
+    /** Trigger an event asynchronously (supports await) */
     async emitAsync(event, ...args) {
-        if (!this._has(event))
-            return this;
-        const callbacks = this._getCallbacks(event).slice();
-        const callbacksToRemove = [];
-        for (let i = 0; i < callbacks.length; i++) {
-            const cb = callbacks[i];
-            if (cb.count !== DONE) {
-                try {
-                    await cb.callback(...args);
-                }
-                catch (err) {
-                    internal(this)._console.error(`Error in async event "${event}" callback:`, err);
-                }
-                if (cb.count === ONCE) {
-                    cb.count = DONE;
-                    callbacksToRemove.push(i);
+        const self = internal(this);
+        const hasRegular = this._has(event);
+        if (hasRegular) {
+            const callbacks = this._getCallbacks(event).slice();
+            const callbacksToRemove = [];
+            for (let i = 0; i < callbacks.length; i++) {
+                const cb = callbacks[i];
+                if (cb.count !== DONE) {
+                    try {
+                        await cb.callback(...args);
+                    }
+                    catch (err) {
+                        self._console.error(`Error in async event "${event}" callback:`, err);
+                    }
+                    if (cb.count > 0) {
+                        cb.count--;
+                        if (cb.count === 0) {
+                            cb.count = DONE;
+                            callbacksToRemove.push(i);
+                        }
+                    }
                 }
             }
-        }
-        if (callbacksToRemove.length > 0) {
-            const actual = this._getCallbacks(event);
-            callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
-            if (actual.length === 0) {
-                internal(this)._events.delete(event);
+            if (callbacksToRemove.length > 0) {
+                const actual = this._getCallbacks(event);
+                callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
+                if (actual.length === 0)
+                    self._events.delete(event);
             }
         }
-        const anyCallbacks = internal(this)._anyCallbacks || [];
+        // Call onAny even if there are no normal listeners
+        const anyCallbacks = self._anyCallbacks || [];
         for (const fn of anyCallbacks) {
             try {
                 await fn(event, ...args);
             }
             catch (err) {
-                internal(this)._console.error(`Error in async onAny listener:`, err);
+                self._console.error(`Error in async onAny listener:`, err);
             }
         }
         return this;

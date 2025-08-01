@@ -13,6 +13,7 @@ export default class EventEmitter {
     /** Trigger an event synchronously */
     emit(event: string, ...args: any[]): this;
     /** Trigger an event asynchronously (supports await) */
+    /** Trigger an event asynchronously (supports await) */
     emitAsync(event: string, ...args: any[]): Promise<this>;
     /** Register a listener for all events */
     onAny(callback: Callback): this;
