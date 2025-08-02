@@ -307,7 +307,7 @@ export default class EventEmitter {
     const self = internal(this);
     return (
       self._maxListeners !== null &&
-      self._maxListeners <= this.listenersNumber(event)
+      self._maxListeners >= this.listenersNumber(event)
     );
   }
 

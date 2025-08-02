@@ -229,7 +229,7 @@ export default class EventEmitter {
     _achieveMaxListener(event) {
         const self = internal(this);
         return (self._maxListeners !== null &&
-            self._maxListeners <= this.listenersNumber(event));
+            self._maxListeners >= this.listenersNumber(event));
     }
     /** Check if callback already exists */
     _callbackExists(event, callback, context) {
