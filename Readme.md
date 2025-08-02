@@ -37,7 +37,7 @@ emitter.emit('hello', 'Alice'); // Hello, Alice
 
 ## Features
 
-### 🔁 on(event, callback, context?, weight?, count?)
+### 🔁 on(event, callback, context?, weight?, mode?)
 Register a callback for an event.
 
 ```js
