@@ -1,6 +1,6 @@
 {
   "name": "event-emitter-adv",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "An advanced EventEmitter with priority, context, and async support.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
