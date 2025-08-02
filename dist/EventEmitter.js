@@ -20,8 +20,14 @@ export default class EventEmitter {
     constructor(maxListeners = null, localConsole = console) {
         const self = internal(this);
         self._console = localConsole;
-        self._maxListeners =
-            maxListeners === null ? null : parseInt(maxListeners, 10);
+        // ИСПРАВЛЕНО: добавлена проверка на валидность числа и отрицательные значения
+        if (maxListeners !== null) {
+            const parsed = parseInt(maxListeners, 10);
+            self._maxListeners = isNaN(parsed) ? null : Math.max(0, parsed);
+        }
+        else {
+            self._maxListeners = null;
+        }
     }
     /** Add a listener to an event */
     on(event, callback, context = null, weight = 1, mode = MANY) {
@@ -32,7 +38,9 @@ export default class EventEmitter {
         if (typeof callback !== "function") {
             throw new TypeError(`${callback} is not a function`);
         }
-        if (this._has(event) && this._achieveMaxListener(event)) {
+        // ИСПРАВЛЕНО: проверяем лимит правильно - текущее количество >= максимального
+        if (self._maxListeners !== null &&
+            this.listenersNumber(event) >= self._maxListeners) {
             self._console.warn(`Max listeners (${self._maxListeners}) for event "${event}" is reached!`);
             return this;
         }
@@ -74,7 +82,8 @@ export default class EventEmitter {
             const callbacks = this._getCallbacks(event);
             const indicesToRemove = [];
             callbacks.forEach((cb, index) => {
-                const callbackMatches = cb.originalCallback === callback || cb.callback === callback;
+                // ИСПРАВЛЕНО: упрощенная логика - сравниваем только оригинальные колбэки
+                const callbackMatches = cb.originalCallback === callback;
                 const contextMatches = context === null || cb.context === context;
                 if (callbackMatches && contextMatches) {
                     indicesToRemove.push(index);
@@ -93,9 +102,9 @@ export default class EventEmitter {
         const self = internal(this);
         // обычные обработчики
         if (this._has(event)) {
-            const callbacks = this._getCallbacks(event).slice();
-            const callbacksToRemove = [];
-            callbacks.forEach((cb, i) => {
+            const callbacks = this._getCallbacks(event).slice(); // копия для безопасности
+            const callbacksToRemove = []; // ИСПРАВЛЕНО: сохраняем ссылки на объекты, а не индексы
+            callbacks.forEach((cb) => {
                 if (cb.mode !== DONE) {
                     try {
                         cb.callback(...args);
@@ -105,20 +114,29 @@ export default class EventEmitter {
                     }
                     if (cb.mode === ONCE) {
                         cb.mode = DONE;
-                        callbacksToRemove.push(i);
+                        callbacksToRemove.push(cb); // сохраняем ссылку на объект
                     }
                 }
             });
+            // ИСПРАВЛЕНО: удаляем по ссылкам на объекты из оригинального массива
             if (callbacksToRemove.length > 0) {
-                const actual = this._getCallbacks(event);
-                callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
-                if (actual.length === 0)
+                const actualCallbacks = this._getCallbacks(event);
+                callbacksToRemove.forEach((cbToRemove) => {
+                    const index = actualCallbacks.findIndex((cb) => cb === cbToRemove);
+                    if (index !== -1) {
+                        actualCallbacks.splice(index, 1);
+                    }
+                });
+                if (actualCallbacks.length === 0) {
                     self._events.delete(event);
+                }
             }
         }
         // onAny обработчики
         if (self._anyCallbacks && self._anyCallbacks.length > 0) {
-            self._anyCallbacks.forEach((fn) => {
+            // ИСПРАВЛЕНО: создаем копию массива для безопасности
+            const anyCallbacks = self._anyCallbacks.slice();
+            anyCallbacks.forEach((fn) => {
                 try {
                     fn(event, ...args);
                 }
@@ -131,13 +149,13 @@ export default class EventEmitter {
     }
     /** Trigger an event asynchronously (supports await) */
     async emitAsync(event, ...args) {
+        var _a;
         const self = internal(this);
-        const hasRegular = this._has(event);
-        if (hasRegular) {
+        if (this._has(event)) {
             const callbacks = this._getCallbacks(event).slice();
-            const callbacksToRemove = [];
-            for (let i = 0; i < callbacks.length; i++) {
-                const cb = callbacks[i];
+            const callbacksToRemove = []; // ИСПРАВЛЕНО: сохраняем ссылки на объекты
+            for (const cb of callbacks) {
+                // ИСПРАВЛЕНО: используем for...of для большей ясности
                 if (cb.mode !== DONE) {
                     try {
                         await cb.callback(...args);
@@ -147,19 +165,27 @@ export default class EventEmitter {
                     }
                     if (cb.mode === ONCE) {
                         cb.mode = DONE;
-                        callbacksToRemove.push(i);
+                        callbacksToRemove.push(cb); // сохраняем ссылку на объект
                     }
                 }
             }
+            // ИСПРАВЛЕНО: удаляем по ссылкам на объекты из оригинального массива
             if (callbacksToRemove.length > 0) {
-                const actual = this._getCallbacks(event);
-                callbacksToRemove.reverse().forEach((i) => actual.splice(i, 1));
-                if (actual.length === 0)
+                const actualCallbacks = this._getCallbacks(event);
+                callbacksToRemove.forEach((cbToRemove) => {
+                    const index = actualCallbacks.findIndex((cb) => cb === cbToRemove);
+                    if (index !== -1) {
+                        actualCallbacks.splice(index, 1);
+                    }
+                });
+                if (actualCallbacks.length === 0) {
                     self._events.delete(event);
+                }
             }
         }
         // Call onAny even if there are no normal listeners
-        const anyCallbacks = self._anyCallbacks || [];
+        // ИСПРАВЛЕНО: создаем копию массива для безопасности
+        const anyCallbacks = ((_a = self._anyCallbacks) === null || _a === void 0 ? void 0 : _a.slice()) || [];
         for (const fn of anyCallbacks) {
             try {
                 await fn(event, ...args);
@@ -189,7 +215,11 @@ export default class EventEmitter {
         const self = internal(this);
         if (!self._anyCallbacks)
             return this;
-        self._anyCallbacks = self._anyCallbacks.filter((cb) => cb !== callback);
+        // ИСПРАВЛЕНО: более эффективное удаление с помощью splice
+        const index = self._anyCallbacks.indexOf(callback);
+        if (index !== -1) {
+            self._anyCallbacks.splice(index, 1);
+        }
         return this;
     }
     /** Remove all listeners */
@@ -210,8 +240,24 @@ export default class EventEmitter {
     /** Get all listeners for a specific event */
     listeners(event) {
         return this._has(event)
-            ? this._getCallbacks(event).map((cb) => cb.callback)
+            ? this._getCallbacks(event).map((cb) => cb.originalCallback) // ИСПРАВЛЕНО: возвращаем оригинальные колбэки
             : [];
+    }
+    /** Set maximum number of listeners */
+    setMaxListeners(maxListeners) {
+        const self = internal(this);
+        if (maxListeners !== null) {
+            const parsed = parseInt(maxListeners, 10);
+            self._maxListeners = isNaN(parsed) ? null : Math.max(0, parsed);
+        }
+        else {
+            self._maxListeners = null;
+        }
+        return this;
+    }
+    /** Get maximum number of listeners */
+    getMaxListeners() {
+        return internal(this)._maxListeners;
     }
     /** Check if an event exists */
     _has(event) {
@@ -225,24 +271,14 @@ export default class EventEmitter {
         }
         return self._events.get(event);
     }
-    /** Check max listener limit */
-    _achieveMaxListener(event) {
-        const self = internal(this);
-        return (self._maxListeners !== null &&
-            self._maxListeners >= this.listenersNumber(event));
-    }
     /** Check if callback already exists */
     _callbackExists(event, callback, context) {
         if (!this._has(event))
             return false;
         const callbacks = this._getCallbacks(event);
+        // ИСПРАВЛЕНО: упрощенная и более надежная логика сравнения
         return callbacks.some((cb) => {
-            if (cb.callback === callback)
-                return true;
-            if (context && cb.context === context) {
-                return cb.callback.toString() === callback.toString();
-            }
-            return false;
+            return cb.originalCallback === callback && cb.context === context;
         });
     }
 }

@@ -26,12 +26,14 @@ export default class EventEmitter {
     eventNames(): string[];
     /** Get all listeners for a specific event */
     listeners(event: string): Callback[];
+    /** Set maximum number of listeners */
+    setMaxListeners(maxListeners: number | null): this;
+    /** Get maximum number of listeners */
+    getMaxListeners(): number | null;
     /** Check if an event exists */
     private _has;
     /** Get or initialize callback list for event */
     private _getCallbacks;
-    /** Check max listener limit */
-    private _achieveMaxListener;
     /** Check if callback already exists */
     private _callbackExists;
 }
