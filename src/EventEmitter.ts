@@ -6,6 +6,7 @@ type Callback = (...args: any[]) => void;
 
 interface CallbackData {
   callback: Callback;
+  originalCallback: Callback;
   weight: number;
   mode: number;
   context: any;
@@ -81,6 +82,7 @@ export default class EventEmitter {
     const boundCallback = context ? callback.bind(context) : callback;
     const callbackData: CallbackData = {
       callback: boundCallback,
+      originalCallback: callback,
       weight,
       mode,
       context,
@@ -121,19 +123,21 @@ export default class EventEmitter {
       self._events.delete(event);
     } else {
       const callbacks = this._getCallbacks(event);
-      const indices: number[] = [];
+      const indicesToRemove: number[] = [];
 
       callbacks.forEach((cb, index) => {
-        const isMatch =
-          cb.callback === callback ||
-          (context &&
-            cb.context === context &&
-            (cb.callback === callback ||
-              cb.callback === callback.bind(context)));
-        if (isMatch) indices.push(index);
+        const callbackMatches =
+          cb.originalCallback === callback || cb.callback === callback;
+        const contextMatches = context === null || cb.context === context;
+
+        if (callbackMatches && contextMatches) {
+          indicesToRemove.push(index);
+        }
       });
 
-      indices.reverse().forEach((i) => callbacks.splice(i, 1));
+      // Удаляем в обратном порядке чтобы не сбить индексы
+      indicesToRemove.reverse().forEach((i) => callbacks.splice(i, 1));
+
       if (callbacks.length === 0) {
         self._events.delete(event);
       }
@@ -237,7 +241,16 @@ export default class EventEmitter {
   /** Register a listener for all events */
   onAny(callback: Callback): this {
     const self = internal(this);
-    if (!self._anyCallbacks) self._anyCallbacks = [];
+    if (typeof callback !== "function") {
+      throw new TypeError("Callback must be a function");
+    }
+
+    // Проверяем, не добавлен ли уже этот колбэк
+    if (self._anyCallbacks.includes(callback)) {
+      self._console.warn("onAny callback already exists");
+      return this;
+    }
+
     self._anyCallbacks.push(callback);
     return this;
   }
