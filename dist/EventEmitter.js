@@ -24,7 +24,7 @@ export default class EventEmitter {
             maxListeners === null ? null : parseInt(maxListeners, 10);
     }
     /** Add a listener to an event */
-    on(event, callback, context = null, weight = 1, count = MANY) {
+    on(event, callback, context = null, weight = 1, mode = MANY) {
         const self = internal(this);
         if (typeof event !== "string" || !event.trim()) {
             throw new TypeError("Event name must be a non-empty string");
@@ -44,7 +44,7 @@ export default class EventEmitter {
         const callbackData = {
             callback: boundCallback,
             weight,
-            count,
+            mode,
             context,
         };
         const callbacks = this._getCallbacks(event);
@@ -96,19 +96,16 @@ export default class EventEmitter {
             const callbacks = this._getCallbacks(event).slice();
             const callbacksToRemove = [];
             callbacks.forEach((cb, i) => {
-                if (cb.count !== DONE) {
+                if (cb.mode !== DONE) {
                     try {
                         cb.callback(...args);
                     }
                     catch (err) {
                         self._console.error(`Error in event "${event}" callback:`, err);
                     }
-                    if (cb.count > 0) {
-                        cb.count--;
-                        if (cb.count === 0) {
-                            cb.count = DONE;
-                            callbacksToRemove.push(i);
-                        }
+                    if (cb.mode === ONCE) {
+                        cb.mode = DONE;
+                        callbacksToRemove.push(i);
                     }
                 }
             });
@@ -141,19 +138,16 @@ export default class EventEmitter {
             const callbacksToRemove = [];
             for (let i = 0; i < callbacks.length; i++) {
                 const cb = callbacks[i];
-                if (cb.count !== DONE) {
+                if (cb.mode !== DONE) {
                     try {
                         await cb.callback(...args);
                     }
                     catch (err) {
                         self._console.error(`Error in async event "${event}" callback:`, err);
                     }
-                    if (cb.count > 0) {
-                        cb.count--;
-                        if (cb.count === 0) {
-                            cb.count = DONE;
-                            callbacksToRemove.push(i);
-                        }
+                    if (cb.mode === ONCE) {
+                        cb.mode = DONE;
+                        callbacksToRemove.push(i);
                     }
                 }
             }

@@ -5,7 +5,7 @@ type Callback = (...args: any[]) => void;
 export default class EventEmitter {
     constructor(maxListeners?: number | null, localConsole?: Console);
     /** Add a listener to an event */
-    on(event: string, callback: Callback, context?: any, weight?: number, count?: number): this;
+    on(event: string, callback: Callback, context?: any, weight?: number, mode?: number): this;
     /** Add a one-time listener to an event */
     once(event: string, callback: Callback, context?: any, weight?: number): this;
     /** Remove one or all listeners for an event */

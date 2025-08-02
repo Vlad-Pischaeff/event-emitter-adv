@@ -7,7 +7,7 @@ type Callback = (...args: any[]) => void;
 interface CallbackData {
   callback: Callback;
   weight: number;
-  count: number;
+  mode: number;
   context: any;
 }
 
@@ -52,7 +52,7 @@ export default class EventEmitter {
     callback: Callback,
     context: any = null,
     weight = 1,
-    count = MANY
+    mode = MANY
   ): this {
     const self = internal(this);
 
@@ -82,7 +82,7 @@ export default class EventEmitter {
     const callbackData: CallbackData = {
       callback: boundCallback,
       weight,
-      count,
+      mode,
       context,
     };
 
@@ -152,18 +152,15 @@ export default class EventEmitter {
       const callbacksToRemove: number[] = [];
 
       callbacks.forEach((cb, i) => {
-        if (cb.count !== DONE) {
+        if (cb.mode !== DONE) {
           try {
             cb.callback(...args);
           } catch (err) {
             self._console.error(`Error in event "${event}" callback:`, err);
           }
-          if (cb.count > 0) {
-            cb.count--;
-            if (cb.count === 0) {
-              cb.count = DONE;
-              callbacksToRemove.push(i);
-            }
+          if (cb.mode === ONCE) {
+            cb.mode = DONE;
+            callbacksToRemove.push(i);
           }
         }
       });
@@ -200,7 +197,7 @@ export default class EventEmitter {
 
       for (let i = 0; i < callbacks.length; i++) {
         const cb = callbacks[i];
-        if (cb.count !== DONE) {
+        if (cb.mode !== DONE) {
           try {
             await cb.callback(...args);
           } catch (err) {
@@ -210,12 +207,9 @@ export default class EventEmitter {
             );
           }
 
-          if (cb.count > 0) {
-            cb.count--;
-            if (cb.count === 0) {
-              cb.count = DONE;
-              callbacksToRemove.push(i);
-            }
+          if (cb.mode === ONCE) {
+            cb.mode = DONE;
+            callbacksToRemove.push(i);
           }
         }
       }
