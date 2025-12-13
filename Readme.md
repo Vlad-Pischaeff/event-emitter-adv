@@ -12,7 +12,7 @@
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ```bash
 npm install event-emitter-adv
@@ -37,28 +37,28 @@ emitter.emit('hello', 'Alice'); // Hello, Alice
 
 ## Features
 
-### 🔁 on(event, callback, context?, weight?, mode?)
+### on(event, callback, context?, weight?, mode?)
 Register a callback for an event.
 
 ```js
 emitter.on('data', (val) => console.log(val));
 ```
 
-### ✅ once(event, callback, context?, weight?)
+### once(event, callback, context?, weight?)
 Emit an event synchronously.
 
 ```js
 emitter.emit('log', 'This is a message');
 ```
 
-### ⏳ emitAsync(event, ...args)
+### emitAsync(event, ...args)
 Emit an event and wait for all async handlers.
 
 ```js
 await emitter.emitAsync('save', { userId: 1 });
 ```
 
-### 🌐 onAny(callback)
+### onAny(callback)
 Listen to all events.
 
 ```js
@@ -67,14 +67,14 @@ emitter.onAny((eventName, ...args) => {
 });
 ```
 
-### 🔕 offAny(callback)
+### offAny(callback)
 Remove onAny listener.
 
 ```js
 emitter.offAny(myCallback);
 ```
 
-### 🧼 off(event, callback?, context?)
+### off(event, callback?, context?)
 Remove a specific listener or all listeners for an event.
 
 ```js
@@ -82,7 +82,7 @@ emitter.off('data', myCallback);
 emitter.off('data'); // remove all
 ```
 
-## 📌 Prioritization with weight
+## Prioritization with weight
 Callbacks with higher weight run earlier.
 
 ```js
@@ -95,7 +95,7 @@ emitter.emit('process');
 // Low priority
 ```
 
-## 🧠 Context binding
+## Context binding
 Pass this context to the callback:
 
 ```js
@@ -111,7 +111,7 @@ emitter.emit('info', 'It works');
 // [LOG] It works
 ```
 
-## 📚 API Summary
+## API Summary
 
 | Method                          | Description                          |
 |---------------------------------|--------------------------------------|
@@ -127,7 +127,7 @@ emitter.emit('info', 'It works');
 | `eventNames()`                  | List all event names                 |
 | `listenersNumber(event)`        | Count listeners for an event         |
 
-## ✅ TypeScript Support
+## TypeScript Support
 All methods are fully typed with strict: true compatibility.
 
 ```js
@@ -135,14 +135,14 @@ const emitter = new EventEmitter();
 emitter.on('data', (val: number) => { /* ... */ });
 ```
 
-## 🧪 Testing / Local Development
+## Testing / Local Development
 
 ```bash
 npm install
 npm run build
 ```
 
-## 📄 License
+## License
 MIT
 
 ## 🙌 Author
