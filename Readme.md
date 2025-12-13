@@ -145,6 +145,6 @@ npm run build
 ## License
 MIT
 
-## 🙌 Author
+## Author
 Created by Владислав Пищаев/Vlad Pishchaev
 
