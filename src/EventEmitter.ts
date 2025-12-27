@@ -43,7 +43,7 @@ export default class EventEmitter {
   ) {
     const self = internal(this);
     self._console = localConsole;
-    // ИСПРАВЛЕНО: добавлена проверка на валидность числа и отрицательные значения
+    // добавлена проверка на валидность числа и отрицательные значения
     if (maxListeners !== null) {
       const parsed = parseInt(maxListeners as any, 10);
       self._maxListeners = isNaN(parsed) ? null : Math.max(0, parsed);
@@ -70,7 +70,7 @@ export default class EventEmitter {
       throw new TypeError(`${callback} is not a function`);
     }
 
-    // ИСПРАВЛЕНО: проверяем лимит правильно - текущее количество >= максимального
+    // проверяем лимит правильно - текущее количество >= максимального
     if (
       self._maxListeners !== null &&
       this.listenersNumber(event) >= self._maxListeners
@@ -135,7 +135,7 @@ export default class EventEmitter {
       const indicesToRemove: number[] = [];
 
       callbacks.forEach((cb, index) => {
-        // ИСПРАВЛЕНО: упрощенная логика - сравниваем только оригинальные колбэки
+        // упрощенная логика - сравниваем только оригинальные колбэки
         const callbackMatches = cb.originalCallback === callback;
         const contextMatches = context === null || cb.context === context;
 
@@ -162,7 +162,7 @@ export default class EventEmitter {
     // обычные обработчики
     if (this._has(event)) {
       const callbacks = this._getCallbacks(event).slice(); // копия для безопасности
-      const callbacksToRemove: CallbackData[] = []; // ИСПРАВЛЕНО: сохраняем ссылки на объекты, а не индексы
+      const callbacksToRemove: CallbackData[] = []; // сохраняем ссылки на объекты, а не индексы
 
       callbacks.forEach((cb) => {
         if (cb.mode !== DONE) {
@@ -178,7 +178,7 @@ export default class EventEmitter {
         }
       });
 
-      // ИСПРАВЛЕНО: удаляем по ссылкам на объекты из оригинального массива
+      // удаляем по ссылкам на объекты из оригинального массива
       if (callbacksToRemove.length > 0) {
         const actualCallbacks = this._getCallbacks(event);
         callbacksToRemove.forEach((cbToRemove) => {
@@ -195,7 +195,7 @@ export default class EventEmitter {
 
     // onAny обработчики
     if (self._anyCallbacks && self._anyCallbacks.length > 0) {
-      // ИСПРАВЛЕНО: создаем копию массива для безопасности
+      // создаем копию массива для безопасности
       const anyCallbacks = self._anyCallbacks.slice();
       anyCallbacks.forEach((fn) => {
         try {
@@ -215,10 +215,10 @@ export default class EventEmitter {
 
     if (this._has(event)) {
       const callbacks = this._getCallbacks(event).slice();
-      const callbacksToRemove: CallbackData[] = []; // ИСПРАВЛЕНО: сохраняем ссылки на объекты
+      const callbacksToRemove: CallbackData[] = []; // сохраняем ссылки на объекты
 
       for (const cb of callbacks) {
-        // ИСПРАВЛЕНО: используем for...of для большей ясности
+        // используем for...of для большей ясности
         if (cb.mode !== DONE) {
           try {
             await cb.callback(...args);
@@ -236,7 +236,7 @@ export default class EventEmitter {
         }
       }
 
-      // ИСПРАВЛЕНО: удаляем по ссылкам на объекты из оригинального массива
+      // удаляем по ссылкам на объекты из оригинального массива
       if (callbacksToRemove.length > 0) {
         const actualCallbacks = this._getCallbacks(event);
         callbacksToRemove.forEach((cbToRemove) => {
@@ -252,7 +252,7 @@ export default class EventEmitter {
     }
 
     // Call onAny even if there are no normal listeners
-    // ИСПРАВЛЕНО: создаем копию массива для безопасности
+    // создаем копию массива для безопасности
     const anyCallbacks = self._anyCallbacks?.slice() || [];
     for (const fn of anyCallbacks) {
       try {
@@ -287,7 +287,7 @@ export default class EventEmitter {
     const self = internal(this);
     if (!self._anyCallbacks) return this;
 
-    // ИСПРАВЛЕНО: более эффективное удаление с помощью splice
+    // более эффективное удаление с помощью splice
     const index = self._anyCallbacks.indexOf(callback);
     if (index !== -1) {
       self._anyCallbacks.splice(index, 1);
@@ -317,7 +317,7 @@ export default class EventEmitter {
   /** Get all listeners for a specific event */
   listeners(event: string): Callback[] {
     return this._has(event)
-      ? this._getCallbacks(event).map((cb) => cb.originalCallback) // ИСПРАВЛЕНО: возвращаем оригинальные колбэки
+      ? this._getCallbacks(event).map((cb) => cb.originalCallback)
       : [];
   }
 
@@ -360,7 +360,7 @@ export default class EventEmitter {
   ): boolean {
     if (!this._has(event)) return false;
     const callbacks = this._getCallbacks(event);
-    // ИСПРАВЛЕНО: упрощенная и более надежная логика сравнения
+    // упрощенная и более надежная логика сравнения
     return callbacks.some((cb) => {
       return cb.originalCallback === callback && cb.context === context;
     });
