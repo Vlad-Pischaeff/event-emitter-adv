@@ -160,4 +160,43 @@ describe("EventEmitter", () => {
 
     expect(calls).toEqual(["first", "second", "first", "second"]);
   });
+
+  it("should preserve order when emit is called inside emitAsync listener", async () => {
+    const calls: string[] = [];
+
+    emitter.on("a", async () => {
+      calls.push("a:start");
+      emitter.emit("b");
+      calls.push("a:end");
+    });
+
+    emitter.on("b", () => {
+      calls.push("b");
+    });
+
+    await emitter.emitAsync("a");
+
+    expect(calls).toEqual(["a:start", "a:end", "b"]);
+  });
+
+  it("should preserve order when emitAsync is called inside emit listener", async () => {
+    const calls: string[] = [];
+
+    emitter.on("a", () => {
+      calls.push("a:start");
+      emitter.emitAsync("b");
+      calls.push("a:end");
+    });
+
+    emitter.on("b", async () => {
+      calls.push("b");
+    });
+
+    emitter.emit("a");
+
+    // даём очереди полностью отработать
+    await Promise.resolve();
+
+    expect(calls).toEqual(["a:start", "a:end", "b"]);
+  });
 });

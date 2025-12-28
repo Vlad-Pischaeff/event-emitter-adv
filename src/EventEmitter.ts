@@ -13,7 +13,7 @@ interface InternalState {
   _anyCallbacks: Callback[];
   _console: Console;
   _maxListeners: number | null;
-  _emitQueue: Array<() => void>;
+  _emitQueue: Array<() => void | Promise<void>>;
   _emitting: boolean;
 }
 
@@ -210,45 +210,70 @@ export default class EventEmitter {
 
   async emitAsync(event: string, ...args: any[]): Promise<this> {
     const self = internal(this);
-    const callbacks = self._events.get(event);
 
-    if (callbacks && callbacks.length > 0) {
-      const snapshot = callbacks.slice();
-      const toRemove: CallbackData[] = [];
+    return new Promise<this>((resolve) => {
+      self._emitQueue.push(async () => {
+        const callbacks = self._events.get(event);
 
-      for (const cb of snapshot) {
+        if (callbacks && callbacks.length > 0) {
+          const snapshot = callbacks.slice();
+          const toRemove: CallbackData[] = [];
+
+          for (const cb of snapshot) {
+            try {
+              await cb.callback(...args);
+            } catch (err) {
+              self._console.error(
+                `Error in async event "${event}" callback:`,
+                err
+              );
+            }
+
+            if (cb.once) {
+              toRemove.push(cb);
+            }
+          }
+
+          if (toRemove.length > 0) {
+            for (const cb of toRemove) {
+              const idx = callbacks.indexOf(cb);
+              if (idx !== -1) callbacks.splice(idx, 1);
+            }
+            if (callbacks.length === 0) {
+              self._events.delete(event);
+            }
+          }
+        }
+
+        if (self._anyCallbacks.length > 0) {
+          const anySnapshot = self._anyCallbacks.slice();
+          for (const fn of anySnapshot) {
+            try {
+              await fn(event, ...args);
+            } catch (err) {
+              self._console.error(`Error in async onAny listener:`, err);
+            }
+          }
+        }
+
+        resolve(this);
+      });
+
+      if (self._emitting) return;
+
+      self._emitting = true;
+
+      (async () => {
         try {
-          await cb.callback(...args);
-        } catch (err) {
-          self._console.error(`Error in async event "${event}" callback:`, err);
+          while (self._emitQueue.length > 0) {
+            const task = self._emitQueue.shift()!;
+            await task();
+          }
+        } finally {
+          self._emitting = false;
         }
-
-        if (cb.once) {
-          toRemove.push(cb);
-        }
-      }
-
-      if (toRemove.length > 0) {
-        for (const cb of toRemove) {
-          const idx = callbacks.indexOf(cb);
-          if (idx !== -1) callbacks.splice(idx, 1);
-        }
-        if (callbacks.length === 0) {
-          self._events.delete(event);
-        }
-      }
-    }
-
-    const anyCallbacks = self._anyCallbacks.slice();
-    for (const fn of anyCallbacks) {
-      try {
-        await fn(event, ...args);
-      } catch (err) {
-        self._console.error(`Error in async onAny listener:`, err);
-      }
-    }
-
-    return this;
+      })();
+    });
   }
 
   onAny(callback: Callback): this {
@@ -268,7 +293,6 @@ export default class EventEmitter {
 
   offAny(callback: Callback): this {
     const self = internal(this);
-    if (!self._anyCallbacks) return this;
 
     const index = self._anyCallbacks.indexOf(callback);
     if (index !== -1) {
@@ -281,17 +305,19 @@ export default class EventEmitter {
   clear(): this {
     const self = internal(this);
     self._events.clear();
-    self._anyCallbacks = [];
-    self._emitQueue = [];
+    self._anyCallbacks.length = 0;
     return this;
   }
 
   listenersNumber(event: string): number {
-    return this._has(event) ? this._getCallbacks(event).length : 0;
+    const self = internal(this);
+    const callbacks = self._events.get(event);
+    return callbacks ? callbacks.length : 0;
   }
 
   eventNames(): string[] {
-    return Array.from(internal(this)._events.keys());
+    const self = internal(this);
+    return Array.from(self._events.keys());
   }
 
   listeners(event: string): Callback[] {
