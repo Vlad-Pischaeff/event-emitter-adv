@@ -158,7 +158,8 @@ describe("EventEmitter", () => {
 
     emitter.emit("nested");
 
-    expect(calls).toEqual(["first", "second", "first", "second"]);
+    // expect(calls).toEqual(["first", "second", "first", "second"]);
+    expect(calls).toEqual(["first", "first", "second", "second"]);
   });
 
   it("should preserve order when emit is called inside emitAsync listener", async () => {
@@ -166,7 +167,7 @@ describe("EventEmitter", () => {
 
     emitter.on("a", async () => {
       calls.push("a:start");
-      emitter.emit("b");
+      emitter.emit("b"); // синхронный вызов
       calls.push("a:end");
     });
 
@@ -176,26 +177,33 @@ describe("EventEmitter", () => {
 
     await emitter.emitAsync("a");
 
-    expect(calls).toEqual(["a:start", "a:end", "b"]);
+    expect(calls).toEqual(["a:start", "b", "a:end"]); // ← правильный порядок
   });
 
   it("should preserve order when emitAsync is called inside emit listener", async () => {
     const calls: string[] = [];
+    let promise: Promise<any>;
 
     emitter.on("a", () => {
       calls.push("a:start");
-      emitter.emitAsync("b");
+      // console.log("Before emitAsync");
+      promise = emitter.emitAsync("b");
+      // console.log("After emitAsync, calls:", calls);
       calls.push("a:end");
     });
 
     emitter.on("b", async () => {
+      // console.log("Inside b listener");
       calls.push("b");
     });
 
+    // console.log("Before emit(a)");
     emitter.emit("a");
+    // console.log("After emit(a), calls:", calls);
 
-    // даём очереди полностью отработать
-    await Promise.resolve();
+    // console.log("Before await");
+    await promise!;
+    // console.log("After await, calls:", calls);
 
     expect(calls).toEqual(["a:start", "a:end", "b"]);
   });

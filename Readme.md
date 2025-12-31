@@ -1,6 +1,6 @@
 # event-emitter-adv
 
-A powerful and flexible TypeScript EventEmitter implementation with advanced features like priority-based listeners, context binding, and nested emit support.
+A powerful and flexible TypeScript EventEmitter implementation with advanced features like priority-based listeners, context binding, and asynchronous event processing.
 
 ## Features
 
@@ -8,14 +8,13 @@ A powerful and flexible TypeScript EventEmitter implementation with advanced fea
 - **Context binding** - Bind callbacks to specific contexts
 - **One-time listeners** - Automatically remove after first trigger
 - **Global listeners** - Listen to all events with `onAny`
-- **Async support** - Both synchronous and asynchronous event emission
+- **Async support** - Both synchronous and asynchronous event emission with queue-based processing
 - **Private state** - Uses WeakMap for truly private internal state
 - **Error handling** - Graceful error handling with custom console
 - **Max listeners** - Configurable limit on listeners per event
-- **Nested emit support** - Queue-based approach handles nested emits correctly
+- **Node.js compatible** - Synchronous `emit()` with snapshot semantics and re-entrant execution
 
 ## Installation
-
 ```bash
 npm install event-emitter-adv
 ```
@@ -31,7 +30,8 @@ npm install event-emitter-adv
 | `emitAsync(event, ...args)`                     | Trigger an event asynchronously          | `Promise<this>`  |
 | `onAny(callback)`                               | Register a global listener for all events| `this`           |
 | `offAny(callback)`                              | Remove a global listener                 | `this`           |
-| `clear()`                                       | Remove all listeners and clear queue     | `this`           |
+| `clear()`                                       | Remove all listeners                     | `this`           |
+| `removeAllListeners(event?)`                    | Remove all listeners for an event        | `this`           |
 | `listenersNumber(event)`                        | Get number of listeners for an event     | `number`         |
 | `eventNames()`                                  | Get all registered event names           | `string[]`       |
 | `listeners(event)`                              | Get all listener functions for an event  | `Function[]`     |
@@ -39,7 +39,6 @@ npm install event-emitter-adv
 | `getMaxListeners()`                             | Get current max listeners limit          | `number \| null` |
 
 ## Basic Usage
-
 ```typescript
 import { EventEmitter } from 'event-emitter-adv';
 
@@ -57,7 +56,6 @@ emitter.emit('data', 'Hello World'); // Output: Received: Hello World
 ## API Reference
 
 ### Constructor
-
 ```typescript
 new EventEmitter(maxListeners?: number | null, localConsole?: Console)
 ```
@@ -86,6 +84,10 @@ Add a listener to an event.
 - `once: boolean` - Remove after first execution (default: `false`)
 
 **Returns:** `this` (for chaining)
+
+**Throws:**
+- `TypeError` if event is not a non-empty string
+- `TypeError` if callback is not a function
 
 **Example:**
 ```typescript
@@ -135,9 +137,14 @@ Remove listener(s) from an event.
 **Parameters:**
 - `event: string` - Event name
 - `callback: Function | null` - Specific callback to remove, or `null` to remove all (default: `null`)
-- `context: any` - Context to match (default: `null`)
+- `context: any` - Context to match, or `null` to match any context (default: `null`)
 
 **Returns:** `this`
+
+**Behavior:**
+- If `callback` is `null`, removes all listeners for the event
+- If `context` is `null`, removes listeners matching the callback regardless of context
+- If both are provided, removes only exact matches
 
 **Example:**
 ```typescript
@@ -151,7 +158,7 @@ emitter.off('test'); // Remove all handlers for 'test'
 
 ### `emit(event, ...args)`
 
-Trigger an event synchronously. Supports nested emits through queue-based processing.
+Trigger an event synchronously with Node.js-compatible semantics.
 
 **Parameters:**
 - `event: string` - Event name
@@ -159,30 +166,48 @@ Trigger an event synchronously. Supports nested emits through queue-based proces
 
 **Returns:** `this`
 
+**Throws:** The first error thrown by any listener (after all listeners complete)
+
+**Behavior:**
+- Listeners are invoked **immediately** in the current call stack
+- Listener list is **snapshotted** at the start of the call
+- Adding/removing listeners during `emit()` doesn't affect current emission
+- **Re-entrant**: Nested `emit()` calls start new independent emissions
+- **Error handling**: Errors are logged, execution continues, first error is thrown at the end
+- **Async listeners**: Promises are **not awaited** and behave like unhandled rejections
+
 **Example:**
 ```typescript
-emitter.emit('message', 'Hello', 123, { data: true });
+emitter.on('data', (msg) => console.log(msg));
+emitter.emit('data', 'Hello'); // Output: Hello
 
 // Nested emits work correctly
 emitter.on('nested', () => {
   console.log('First');
-  emitter.emit('nested'); // Queued, not executed immediately
+  emitter.emit('inner'); // Executes immediately with own snapshot
 });
-emitter.on('nested', () => console.log('Second'));
-emitter.emit('nested'); // Output: First, Second, First, Second
+emitter.on('inner', () => console.log('Inner'));
+emitter.emit('nested'); // Output: First, Inner
 ```
 
 ---
 
 ### `emitAsync(event, ...args)`
 
-Trigger an event asynchronously, awaiting each listener sequentially.
+Trigger an event asynchronously with serialized execution.
 
 **Parameters:**
 - `event: string` - Event name
 - `...args: any[]` - Arguments to pass to listeners
 
-**Returns:** `Promise<this>`
+**Returns:** `Promise<this>` - Resolves after all listeners complete
+
+**Behavior:**
+- Listeners execute **sequentially** (one at a time)
+- Async listeners are **awaited** before proceeding
+- Multiple `emitAsync()` calls are queued and processed in order
+- Errors are **logged** but don't stop execution
+- Guaranteed non-overlapping execution
 
 **Example:**
 ```typescript
@@ -192,6 +217,7 @@ emitter.on('fetch', async (url) => {
 });
 
 await emitter.emitAsync('fetch', 'https://api.example.com');
+console.log('All async listeners finished');
 ```
 
 ---
@@ -204,6 +230,13 @@ Register a global listener that receives all events.
 - `callback: (event: string, ...args: any[]) => void` - Callback receiving event name and arguments
 
 **Returns:** `this`
+
+**Throws:** `TypeError` if callback is not a function
+
+**Behavior:**
+- Invoked for **every** event
+- Executed **after** event-specific listeners
+- Duplicate callbacks are not added (warning is logged)
 
 **Example:**
 ```typescript
@@ -236,13 +269,32 @@ emitter.offAny(logger);
 
 ### `clear()`
 
-Remove all listeners and clear the event queue.
+Remove all event listeners and wildcard listeners.
 
 **Returns:** `this`
 
 **Example:**
 ```typescript
+emitter.on('data', handler);
+emitter.onAny(logger);
 emitter.clear(); // All listeners removed
+```
+
+---
+
+### `removeAllListeners(event?)`
+
+Remove all listeners for a specific event or all events.
+
+**Parameters:**
+- `event?: string` - Event name. If omitted, removes all listeners for all events.
+
+**Returns:** `this`
+
+**Example:**
+```typescript
+emitter.removeAllListeners('data'); // Remove only 'data' listeners
+emitter.removeAllListeners();       // Remove all listeners
 ```
 
 ---
@@ -254,7 +306,7 @@ Get the number of listeners for a specific event.
 **Parameters:**
 - `event: string` - Event name
 
-**Returns:** `number`
+**Returns:** `number` - Number of listeners (0 if event has no listeners)
 
 **Example:**
 ```typescript
@@ -269,7 +321,7 @@ console.log(emitter.listenersNumber('test')); // Output: 2
 
 Get all registered event names.
 
-**Returns:** `string[]`
+**Returns:** `string[]` - Array of event names (empty if no events)
 
 **Example:**
 ```typescript
@@ -287,7 +339,7 @@ Get all listener functions for an event.
 **Parameters:**
 - `event: string` - Event name
 
-**Returns:** `Function[]` - Array of original callback functions
+**Returns:** `Function[]` - Array of original callback functions (empty if no listeners)
 
 **Example:**
 ```typescript
@@ -307,6 +359,11 @@ Set the maximum number of listeners per event.
 
 **Returns:** `this`
 
+**Behavior:**
+- If `null`, no limit is enforced
+- Non-integers are parsed and clamped to >= 0
+- When limit is reached, warning is logged but listeners can still be added
+
 **Example:**
 ```typescript
 emitter.setMaxListeners(5); // Max 5 listeners per event
@@ -319,11 +376,12 @@ emitter.setMaxListeners(null); // Unlimited
 
 Get the current maximum listeners limit.
 
-**Returns:** `number | null`
+**Returns:** `number | null` - Maximum listeners per event, or `null` if unlimited
 
 **Example:**
 ```typescript
-console.log(emitter.getMaxListeners()); // Output: null or number
+emitter.setMaxListeners(10);
+console.log(emitter.getMaxListeners()); // Output: 10
 ```
 
 ---
@@ -333,7 +391,6 @@ console.log(emitter.getMaxListeners()); // Output: null or number
 ### Priority-based Execution
 
 Listeners with higher weight execute first:
-
 ```typescript
 const emitter = new EventEmitter();
 
@@ -351,7 +408,6 @@ emitter.emit('process');
 ### Context Binding
 
 Preserve `this` context in callbacks:
-
 ```typescript
 class Logger {
   prefix = '[LOG]';
@@ -369,7 +425,6 @@ emitter.emit('log', 'Hello'); // Output: [LOG] Hello
 ### Error Handling
 
 Errors in listeners don't stop other listeners:
-
 ```typescript
 const emitter = new EventEmitter();
 
@@ -381,35 +436,43 @@ emitter.on('risky', () => {
   console.log('This still executes');
 });
 
-emitter.emit('risky');
-// Error is logged to console, but execution continues
-// Output: This still executes
+try {
+  emitter.emit('risky');
+} catch (error) {
+  console.error('First error caught:', error.message);
+}
+// Output:
+// Error logged to console
+// This still executes
+// First error caught: Something went wrong
 ```
 
-### Nested Emits
+### Re-entrant Emit
 
-Queue-based system handles nested emits correctly:
-
+Nested `emit()` calls are fully supported:
 ```typescript
 const emitter = new EventEmitter();
 
-let count = 0;
-emitter.on('recursive', () => {
-  console.log(`Call ${++count}`);
-  if (count < 3) {
-    emitter.emit('recursive'); // Safely queued
-  }
+emitter.on('outer', () => {
+  console.log('Outer start');
+  emitter.emit('inner'); // Executes immediately
+  console.log('Outer end');
 });
 
-emitter.emit('recursive');
+emitter.on('inner', () => {
+  console.log('Inner');
+});
+
+emitter.emit('outer');
 // Output:
-// Call 1
-// Call 2
-// Call 3
+// Outer start
+// Inner
+// Outer end
 ```
 
-### Async Event Processing
+### Async Event Processing with Queue
 
+`emitAsync()` ensures sequential, non-overlapping execution:
 ```typescript
 const emitter = new EventEmitter();
 
@@ -423,12 +486,43 @@ emitter.on('save', async (data) => {
   console.log('Cache invalidated');
 });
 
-await emitter.emitAsync('save', { id: 1, name: 'Test' });
-// Listeners execute sequentially
+// Both emitAsync calls are queued and processed sequentially
+emitter.emitAsync('save', { id: 1, name: 'Test' });
+emitter.emitAsync('save', { id: 2, name: 'Test2' });
+
+// Output (guaranteed order):
+// Saved to database
+// Cache invalidated
+// Saved to database
+// Cache invalidated
+```
+
+### Mixing Sync and Async Emits
+```typescript
+emitter.on('event', async () => {
+  console.log('Start async');
+  await delay(100);
+  console.log('End async');
+});
+
+emitter.emit('event'); // Returns immediately, doesn't wait
+console.log('After emit');
+
+// Output:
+// After emit
+// Start async
+// End async (after 100ms)
+
+await emitter.emitAsync('event'); // Waits for completion
+console.log('After emitAsync');
+
+// Output:
+// Start async
+// End async (after 100ms)
+// After emitAsync
 ```
 
 ### Global Event Monitoring
-
 ```typescript
 const emitter = new EventEmitter();
 
@@ -447,11 +541,8 @@ emitter.emit('logout');
 ## TypeScript Support
 
 Full TypeScript support with proper type definitions:
-
 ```typescript
 import { EventEmitter } from 'event-emitter-adv';
-
-type Callback = (...args: any[]) => void | Promise<void>;
 
 const emitter = new EventEmitter();
 
@@ -473,7 +564,6 @@ emitter.emit('user:update', { id: 1, name: 'Alice' });
 ### Private State Management
 
 Uses WeakMap for truly private state that cannot be accessed from outside:
-
 ```typescript
 const privateMap = new WeakMap<object, InternalState>();
 
@@ -482,7 +572,7 @@ interface InternalState {
   _anyCallbacks: Callback[];
   _console: Console;
   _maxListeners: number | null;
-  _emitQueue: Array<() => void>;
+  _emitQueue: Array<() => void | Promise<void>>;
   _emitting: boolean;
 }
 ```
@@ -492,33 +582,65 @@ This ensures:
 - Memory is automatically cleaned when emitter is garbage collected
 - State is completely inaccessible from outside the class
 
-### Queue-based Emit Processing
+### Synchronous Emit with Snapshot Semantics
 
-Nested emits are handled through a queue system to prevent recursion issues:
+`emit()` uses Node.js-compatible execution model:
 
-1. **Each emit adds a task to the queue** - Instead of executing immediately
-2. **Check if already processing** - If `_emitting` flag is true, just queue and return
-3. **Process queue sequentially** - Main loop processes all queued tasks one by one
-4. **Cleanup** - Reset flag after all tasks are complete
-
-This ensures correct execution order even with complex nested emits:
-
+1. **Snapshot the listener list** - Creates a shallow copy at the start
+2. **Execute synchronously** - All listeners run in the current call stack
+3. **Handle re-entrancy** - Nested `emit()` calls create their own snapshots
+4. **Error handling** - Log errors, continue execution, throw first error at end
 ```typescript
 emit(event: string, ...args: any[]): this {
-  self._emitQueue.push(() => { /* execute callbacks */ });
-  
-  if (self._emitting) return this; // Already processing, just queue
-  
-  self._emitting = true;
-  try {
-    while (self._emitQueue.length > 0) {
-      self._emitQueue.shift()!(); // Execute each queued task
+  const callbacks = self._events.get(event);
+  if (callbacks && callbacks.length > 0) {
+    const snapshot = callbacks.slice(); // Independent snapshot
+    
+    for (const cb of snapshot) {
+      try {
+        cb.callback(...args); // Synchronous execution
+      } catch (err) {
+        // Log and continue
+      }
     }
-  } finally {
-    self._emitting = false;
   }
-  
   return this;
+}
+```
+
+### Async Queue Processing
+
+`emitAsync()` uses a queue system for serialized async execution:
+
+1. **Add task to queue** - Each `emitAsync()` adds a task
+2. **Check processing flag** - If already processing, just queue and return
+3. **Process queue asynchronously** - Uses `Promise.resolve().then()` for next tick
+4. **Sequential execution** - Each task awaits before moving to next
+5. **Cleanup** - Reset flag after queue is empty
+```typescript
+async emitAsync(event: string, ...args: any[]): Promise<this> {
+  const taskPromise = new Promise<this>((resolve) => {
+    self._emitQueue.push(async () => {
+      // Execute callbacks sequentially
+      for (const cb of snapshot) {
+        await cb.callback(...args);
+      }
+      resolve(this);
+    });
+  });
+
+  if (!self._emitting) {
+    self._emitting = true;
+    void Promise.resolve().then(async () => {
+      while (self._emitQueue.length > 0) {
+        const task = self._emitQueue.shift()!;
+        await task();
+      }
+      self._emitting = false;
+    });
+  }
+
+  return taskPromise;
 }
 ```
 
@@ -528,7 +650,6 @@ Listeners are sorted by weight at insertion time:
 - Higher weight = earlier execution
 - Same weight = insertion order preserved
 - Efficient insertion using `findIndex` and `splice`
-
 ```typescript
 const insertIndex = callbacks.findIndex((cb) => cb.weight < weight);
 if (insertIndex === -1) {
@@ -545,28 +666,28 @@ if (insertIndex === -1) {
    - ❌ `'event1'`, `'callback'`
 
 2. **Clean up listeners**: 
-   ```typescript
+```typescript
    componentWillUnmount() {
      emitter.off('data', this.handleData);
    }
-   ```
+```
 
 3. **Use context binding**: 
-   ```typescript
-   // ✅ Good
+```typescript
+   // ✅ Good - context parameter
    emitter.on('click', this.handleClick, this);
    
-   // ❌ Avoid
+   // ❌ Avoid - creates new function each time
    emitter.on('click', this.handleClick.bind(this));
-   ```
+```
 
 4. **Set max listeners**: 
-   ```typescript
+```typescript
    const emitter = new EventEmitter(10); // Prevent memory leaks
-   ```
+```
 
-5. **Handle errors**: 
-   ```typescript
+5. **Handle errors in listeners**: 
+```typescript
    emitter.on('risky', () => {
      try {
        riskyOperation();
@@ -574,34 +695,42 @@ if (insertIndex === -1) {
        console.error('Operation failed:', error);
      }
    });
-   ```
+```
 
 6. **Use `once()` for one-time events**: 
-   ```typescript
+```typescript
    emitter.once('ready', () => initialize());
-   ```
+```
 
-7. **Avoid memory leaks**:
-   ```typescript
+7. **Choose the right emit method**:
+```typescript
+   // Use emit() for fire-and-forget
+   emitter.emit('log', message);
+   
+   // Use emitAsync() when you need to wait
+   await emitter.emitAsync('save', data);
+```
+
+8. **Avoid memory leaks**:
+```typescript
    // Always remove listeners when done
    const handler = () => console.log('Event');
    emitter.on('temp', handler);
    // ... later
    emitter.off('temp', handler);
-   ```
+```
 
 ## Performance Considerations
 
 - **WeakMap overhead**: Minimal, provides automatic garbage collection
-- **Queue system**: Adds slight overhead but prevents stack overflow
+- **Async queue**: Adds serialization overhead but prevents race conditions
 - **Weight sorting**: O(n) insertion, but n is typically small
-- **Snapshot creation**: Each emit creates a shallow copy for safety
-- **Memory**: Listeners are stored efficiently in arrays
+- **Snapshot creation**: Each `emit()` creates a shallow copy for safety
+- **Memory**: Listeners stored efficiently in arrays
 
 ## Common Patterns
 
 ### Event Namespacing
-
 ```typescript
 // Use colons to namespace events
 emitter.on('user:login', handleLogin);
@@ -611,7 +740,6 @@ emitter.on('data:save', handleDataSave);
 ```
 
 ### Event Chaining
-
 ```typescript
 emitter
   .on('start', onStart)
@@ -621,7 +749,6 @@ emitter
 ```
 
 ### Middleware Pattern
-
 ```typescript
 class Middleware {
   constructor(private emitter: EventEmitter) {}
@@ -631,8 +758,8 @@ class Middleware {
     return this;
   }
   
-  execute(data: any) {
-    this.emitter.emit('request', data);
+  async execute(data: any) {
+    await this.emitter.emitAsync('request', data);
   }
 }
 ```
@@ -644,42 +771,50 @@ class Middleware {
 - Check event name spelling
 - Verify listener was added before emit
 - Check if max listeners reached
+- Verify listener wasn't removed by `once` or `off`
 
 ### Context is undefined
 
 - Use context parameter: `emitter.on('event', callback, context)`
 - Or use arrow functions: `emitter.on('event', () => this.method())`
 
+### Async listeners not awaited
+
+- Use `emitAsync()` instead of `emit()`
+- Remember: `emit()` doesn't wait for async functions
+
 ### Memory leak warnings
 
 - Call `off()` to remove listeners
 - Use `once()` for one-time events
 - Set appropriate `maxListeners`
+- Clean up in component unmount/destroy methods
 
 ## Migration Guide
 
 ### From Node.js EventEmitter
-
 ```typescript
-// Node.js
+// Node.js EventEmitter
+const { EventEmitter } = require('events');
+const emitter = new EventEmitter();
 emitter.on('data', callback);
 emitter.emit('data', value);
 
-// This library (same API, plus extras)
-emitter.on('data', callback);
-emitter.on('data', callback, context, weight); // With priority
-emitter.emit('data', value);
+// event-emitter-adv (compatible + extras)
+import { EventEmitter } from 'event-emitter-adv';
+const emitter = new EventEmitter();
+emitter.on('data', callback); // Same API
+emitter.on('data', callback, context, weight); // Plus priority
+await emitter.emitAsync('data', value); // Plus async support
 ```
 
-### From Custom Implementation
+### Key Differences from Node.js
 
-```typescript
-// Before
-listeners['event'].push(callback);
-
-// After
-emitter.on('event', callback);
-```
+1. **Priority/weight support** - Control execution order
+2. **`emitAsync()` method** - Serialized async execution
+3. **`onAny()` wildcard** - Listen to all events
+4. **Context binding** - Built-in `this` binding
+5. **WeakMap state** - Truly private internals
 
 ## License
 
@@ -691,12 +826,13 @@ Contributions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new features
-4. Submit a pull request
+4. Ensure all tests pass
+5. Submit a pull request
 
-## Support
+## Repository
 
-- GitHub Issues: [https://github.com/Vlad-Pischaeff/event-emitter-adv/issues]
+GitHub: [https://github.com/Vlad-Pischaeff/event-emitter-adv](https://github.com/Vlad-Pischaeff/event-emitter-adv)
 
 ---
 
-Created by Владислав Пищаев/Vlad Pishchaev
+Created by Владислав Пищаев / Vlad Pishchaev
