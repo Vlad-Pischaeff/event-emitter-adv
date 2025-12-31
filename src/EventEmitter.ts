@@ -91,14 +91,41 @@ export default class EventEmitter {
    * @param context - Execution context (`this` binding). Defaults to `null`.
    * @param weight - Execution priority. Higher values execute first. Defaults to `1`.
    * @param once - If `true`, listener is removed after first invocation. Defaults to `false`.
-   * @returns `this` for chaining.
-   *
-   * @throws {TypeError} If `event` is not a non-empty string or `callback` is not a function.
    *
    * @example
    * ```typescript
    * emitter.on('data', (msg) => console.log(msg), null, 10);
    * ```
+   *
+   * @example Basic usage
+   * ```typescript
+   * emitter.on('data', (msg) => console.log(msg));
+   * ```
+   *
+   * @example Цепочка вызовов
+   * ```typescript
+   * emitter
+   *   .on('start', onStart)
+   *   .on('end', onEnd)
+   *   .emit('start');
+   * ```
+   *
+   * @example With priority
+   * ```typescript
+   * emitter.on('process', handler1, null, 10); // Executes first
+   * emitter.on('process', handler2, null, 1);  // Executes second
+   * ```
+   *
+   * @example With context
+   * ```typescript
+   * const obj = { name: 'Logger' };
+   * emitter.on('log', function() { console.log(this.name); }, obj);
+   * ```
+   *
+   * @returns `this` for chaining.
+   *
+   * @throws {TypeError} If `event` is not a non-empty string or `callback` is not a function.
+   *
    */
   on(
     event: string,
