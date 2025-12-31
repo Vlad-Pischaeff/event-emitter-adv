@@ -91,6 +91,8 @@ export default class EventEmitter {
    * @param context - Execution context (`this` binding). Defaults to `null`.
    * @param weight - Execution priority. Higher values execute first. Defaults to `1`.
    * @param once - If `true`, listener is removed after first invocation. Defaults to `false`.
+   * @returns `this` for chaining.
+   * @throws {TypeError} If `event` is not a non-empty string or `callback` is not a function.
    *
    * @example
    * ```typescript
@@ -121,11 +123,6 @@ export default class EventEmitter {
    * const obj = { name: 'Logger' };
    * emitter.on('log', function() { console.log(this.name); }, obj);
    * ```
-   *
-   * @returns `this` for chaining.
-   *
-   * @throws {TypeError} If `event` is not a non-empty string or `callback` is not a function.
-   *
    */
   on(
     event: string,
